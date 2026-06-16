@@ -10,7 +10,7 @@ OLED System Stats (128x64, SSD1306) — Screen 1.
     pip3 install luma.oled pillow psutil
     python3 oled_stats.py
 """
-import os, sys, time, math
+import os, sys, time, math, random
 
 # Ξαναχρησιμοποιούμε τη "λογική" από το terminal script
 from stats import cpu_temp, throttled_status, emulation_running, uptime_str
@@ -71,32 +71,51 @@ def draw_aperture(draw, cx, cy, R, r=None):
     draw.polygon(pts, fill="black")
 
 
-def _ellipse_rot(draw, cx, cy, a, b, rot_deg, width=2, n=60):
-    # Έλλειψη περιστραμμένη κατά rot_deg (outline)
-    rot = math.radians(rot_deg)
-    cr, sr = math.cos(rot), math.sin(rot)
-    pts = []
-    for k in range(n + 1):
-        t = 2 * math.pi * k / n
-        x, y = a * math.cos(t), b * math.sin(t)
-        pts.append((cx + x * cr - y * sr, cy + x * sr + y * cr))
-    draw.line(pts, fill="white", width=width)
+# Half-Life logo — ακριβείς συντεταγμένες από το επίσημο SVG (viewBox 364.707)
+_HL_VB_CENTER = 182.3535
+_HL_LAMBDA = [
+    (223.864, 272.729), (185.256, 174.881), (128.653, 264.065),
+    (93.166, 264.065), (172.218, 136.411), (163.343, 111.182),
+    (132.562, 111.182), (132.562, 81.120), (185.253, 81.120),
+    (245.774, 235.019), (272.382, 226.351), (281.249, 256.164),
+]
+_HL_RING_R = 155.425
+_HL_RING_W = 34.0
 
 
-def draw_atom(draw, cx, cy, R):
-    # Science logo: πυρήνας + 3 τροχιές + ηλεκτρόνια
-    a, b = R, int(R * 0.42)
-    for rot in (0, 60, 120):
-        _ellipse_rot(draw, cx, cy, a, b, rot, width=2)
-    # ηλεκτρόνια στις άκρες των τροχιών
-    re = 3
-    for rot in (0, 60, 120):
-        rr = math.radians(rot)
-        ex, ey = cx + a * math.cos(rr), cy + a * math.sin(rr)
-        draw.ellipse((ex - re, ey - re, ex + re, ey + re), fill="white")
-    # πυρήνας
-    rn = int(R * 0.26)
-    draw.ellipse((cx - rn, cy - rn, cx + rn, cy + rn), fill="white")
+def pixel_reveal(device, render_fn, hold=5.0, steps=60, frame_delay=0.03):
+    # Σχεδιάζει με render_fn(draw) και αποκαλύπτει τα pixels με τυχαία σειρά
+    from PIL import Image, ImageDraw
+    full = Image.new("1", (device.width, device.height))
+    render_fn(ImageDraw.Draw(full))
+    pixels = [(x, y) for y in range(device.height)
+              for x in range(device.width) if full.getpixel((x, y))]
+    random.shuffle(pixels)
+
+    out = Image.new("1", (device.width, device.height))
+    od = ImageDraw.Draw(out)
+    per = max(1, len(pixels) // steps)
+    i = 0
+    while i < len(pixels):
+        for _ in range(per):
+            if i < len(pixels):
+                od.point(pixels[i], fill=1)
+                i += 1
+        device.display(out)
+        time.sleep(frame_delay)
+    device.display(full)
+    time.sleep(hold)
+
+
+def draw_halflife(draw, cx, cy, size):
+    # size = συνολικό μέγεθος του logo σε pixels. Μονόχρωμο (white) για OLED.
+    s = size / 364.707
+    r = _HL_RING_R * s
+    w = max(2, round(_HL_RING_W * s))
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline="white", width=w)
+    pts = [(cx + (x - _HL_VB_CENTER) * s, cy + (y - _HL_VB_CENTER) * s)
+           for x, y in _HL_LAMBDA]
+    draw.polygon(pts, fill="white")
 
 
 def render_boot_lines(device, font, shown):
@@ -142,10 +161,8 @@ def ctext(draw, font, y, text):
 
 def splash(device, font, hold=5.0):
     from luma.core.render import canvas
-    # Science / atom logo (χωρίς animation, χωρίς κείμενο)
-    with canvas(device) as draw:
-        draw_atom(draw, 64, 32, 28)
-    time.sleep(hold)
+    # Half-Life logo με pixel-reveal animation (size=67 -> 58px, ίδιο με aperture)
+    pixel_reveal(device, lambda d: draw_halflife(d, 64, 32, 67), hold=hold)
 
 
 def draw_bar(draw, x, y, w, h, pct):
@@ -163,12 +180,9 @@ def row(draw, font, y, label, value, pct):
     draw.text((100, y), value, font=font, fill="white")
 
 
-def run(device, font):
-    # Boot -> splash -> live system stats (καλείται και από το monitor.py)
+def stats_loop(device, font):
+    # Μόνο το live system stats (χωρίς boot/splash)
     from luma.core.render import canvas
-
-    boot_sequence(device, font)
-    splash(device, font, hold=5.0)
 
     while True:
         cpu = psutil.cpu_percent(interval=None)
@@ -193,6 +207,13 @@ def run(device, font):
             row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
 
         time.sleep(1)
+
+
+def run(device, font):
+    # Boot -> splash -> live system stats (standalone)
+    boot_sequence(device, font)
+    splash(device, font, hold=5.0)
+    stats_loop(device, font)
 
 
 def main():

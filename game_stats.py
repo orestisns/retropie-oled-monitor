@@ -21,7 +21,7 @@ OLED Game / Emulation Stats (128x64, SSD1306) — Screen 2.
 import os, sys, time
 
 # Ξαναχρησιμοποιούμε τις γραφικές βοηθητικές από το screen 1
-from oled_stats import get_device, draw_bar, ctext, draw_aperture
+from oled_stats import get_device, draw_bar, ctext, draw_aperture, pixel_reveal
 
 STATUS_FILE = os.environ.get(
     "GAME_STATUS_FILE",
@@ -30,10 +30,8 @@ STATUS_FILE = os.environ.get(
 
 
 def aperture_splash(device, font, hold=10.0):
-    from luma.core.render import canvas
-    with canvas(device) as draw:
-        draw_aperture(draw, 64, 32, 28)
-    time.sleep(hold)
+    # Aperture logo με pixel-reveal animation (κοινή συνάρτηση)
+    pixel_reveal(device, lambda d: draw_aperture(d, 64, 32, 28.5), hold=hold)
 
 
 def read_status():
@@ -72,11 +70,9 @@ def marquee(text, width, pos):
     return (s + s)[pos:pos + width]
 
 
-def run(device, font):
-    # Aperture splash -> live game stats (καλείται και από το monitor.py)
+def stats_loop(device, font):
+    # Μόνο το live game stats (χωρίς splash)
     from luma.core.render import canvas
-
-    aperture_splash(device, font, hold=10.0)
 
     scroll = 0
     while True:
@@ -86,7 +82,7 @@ def run(device, font):
         with canvas(device) as draw:
             if not playing:
                 # Καμία ενεργή παρτίδα -> δείχνει το aperture logo
-                draw_aperture(draw, 64, 32, 28)
+                draw_aperture(draw, 64, 32, 28.5)
             else:
                 game = d.get("game", "?")
                 system = d.get("system", "?")
@@ -121,6 +117,12 @@ def run(device, font):
 
         scroll += 1
         time.sleep(0.4)
+
+
+def run(device, font):
+    # Aperture splash -> live game stats (standalone)
+    aperture_splash(device, font, hold=10.0)
+    stats_loop(device, font)
 
 
 def main():
