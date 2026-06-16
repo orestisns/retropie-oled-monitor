@@ -1,96 +1,88 @@
-# Εγκατάσταση (Software) στο Raspberry Pi / RetroPie
+# Εγκατάσταση (όλα με εντολές terminal)
 
-> Η καλωδίωση των οθονών γίνεται ξεχωριστά. Εδώ μόνο το software.
+> Όλα γίνονται γράφοντας εντολές — χωρίς χειροκίνητο editing αρχείων.
+> Η καλωδίωση των οθονών γίνεται ξεχωριστά (βλ. README).
 
-## 1. Ενημέρωση συστήματος
+## Γρήγορη εγκατάσταση (copy-paste όλα μαζί)
+
 ```bash
-sudo apt update
-sudo apt upgrade -y
-```
-
-## 2. Ενεργοποίηση I2C
-```bash
-sudo raspi-config
-```
-→ Interface Options → I2C → Yes → Finish
-
-## 3. Δημιουργία των δύο software I2C buses
-```bash
-sudo nano /boot/config.txt      # ή /boot/firmware/config.txt
-```
-Στο τέλος του αρχείου πρόσθεσε:
-```
-dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=23,i2c_gpio_scl=24
-dtoverlay=i2c-gpio,bus=4,i2c_gpio_sda=22,i2c_gpio_scl=27
-```
-- bus 3 → Οθόνη 1 (system)  | GPIO23 (SDA), GPIO24 (SCL)
-- bus 4 → Οθόνη 2 (game)    | GPIO22 (SDA), GPIO27 (SCL)
-
-## 4. Πακέτα συστήματος
-```bash
+# 1) Ενημέρωση + πακέτα συστήματος
+sudo apt update && sudo apt full-upgrade -y
 sudo apt install -y python3-pip i2c-tools libjpeg-dev zlib1g-dev git
-```
 
-## 5. Reboot
-```bash
+# 2) Ενεργοποίηση I2C (χωρίς μενού)
+sudo raspi-config nonint do_i2c 0
+
+# 3) Δημιουργία των 2 software I2C buses στο config.txt
+CONFIG=/boot/firmware/config.txt; [ -f "$CONFIG" ] || CONFIG=/boot/config.txt
+grep -q "i2c_gpio_sda=23" "$CONFIG" || echo "dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=23,i2c_gpio_scl=24" | sudo tee -a "$CONFIG"
+grep -q "i2c_gpio_sda=22" "$CONFIG" || echo "dtoverlay=i2c-gpio,bus=4,i2c_gpio_sda=22,i2c_gpio_scl=27" | sudo tee -a "$CONFIG"
+
+# 4) Κατέβασμα project
+cd ~ && git clone https://github.com/orestisns/retropie-oled-monitor.git
+cd ~/retropie-oled-monitor
+
+# 5) Python βιβλιοθήκες
+pip3 install luma.oled pillow psutil || pip3 install --break-system-packages luma.oled pillow psutil
+
+# 6) Εγκατάσταση game hooks (για το screen 2)
+sudo cp runcommand-onstart.sh /opt/retropie/configs/all/runcommand-onstart.sh
+sudo cp runcommand-onend.sh   /opt/retropie/configs/all/runcommand-onend.sh
+sudo chmod +x /opt/retropie/configs/all/runcommand-onstart.sh /opt/retropie/configs/all/runcommand-onend.sh
+
+# 7) Εγκατάσταση autostart (systemd) — προσαρμογή στον χρήστη σου
+sudo cp retropie-oled-monitor.service /etc/systemd/system/
+sudo sed -i "s|/home/pi/retropie-oled-monitor|$HOME/retropie-oled-monitor|g; s|^User=pi|User=$USER|" /etc/systemd/system/retropie-oled-monitor.service
+sudo systemctl daemon-reload
+sudo systemctl enable retropie-oled-monitor.service
+
+# 8) Επανεκκίνηση
 sudo reboot
 ```
 
-## 6. Έλεγχος buses
+## Έλεγχος μετά το reboot
 ```bash
-ls /dev/i2c-*            # πρέπει να υπάρχουν i2c-3 και i2c-4
-i2cdetect -y 3           # -> 3c (αν είναι συνδεδεμένη η οθόνη 1)
-i2cdetect -y 4           # -> 3c (αν είναι συνδεδεμένη η οθόνη 2)
+# Υπάρχουν τα 2 buses;
+ls /dev/i2c-3 /dev/i2c-4
+
+# Ανιχνεύονται οι οθόνες; (πρέπει να δείξει 3c)
+i2cdetect -y 3
+i2cdetect -y 4
+
+# Τρέχει το service;
+systemctl status retropie-oled-monitor.service
 ```
 
-## 7. Κατέβασμα project
+## Χρήσιμες εντολές διαχείρισης
 ```bash
-cd ~
-git clone https://github.com/orestisns/retropie-oled-monitor.git
-cd retropie-oled-monitor
+# Logs ζωντανά (debug)
+journalctl -u retropie-oled-monitor.service -f
+
+# Restart / Stop
+sudo systemctl restart retropie-oled-monitor.service
+sudo systemctl stop retropie-oled-monitor.service
+
+# Χειροκίνητη εκτέλεση (αφού κάνεις stop το service)
+cd ~/retropie-oled-monitor && python3 monitor.py
 ```
 
-## 8. Python βιβλιοθήκες
-```bash
-pip3 install luma.oled pillow psutil
-# αν βγει "externally-managed-environment":
-# pip3 install --break-system-packages luma.oled pillow psutil
-```
-
-## 9. runcommand hooks (game stats)
-```bash
-cp runcommand-onstart.sh /opt/retropie/configs/all/runcommand-onstart.sh
-cp runcommand-onend.sh   /opt/retropie/configs/all/runcommand-onend.sh
-chmod +x /opt/retropie/configs/all/runcommand-onstart.sh
-chmod +x /opt/retropie/configs/all/runcommand-onend.sh
-```
-> Αν υπάρχουν ήδη, πρόσθεσε το περιεχόμενο αντί να τα αντικαταστήσεις.
-
-## 10. Δοκιμή
+## Ενημέρωση σε νέα έκδοση
 ```bash
 cd ~/retropie-oled-monitor
-python3 monitor.py
+git pull
+sudo systemctl restart retropie-oled-monitor.service
 ```
-Σταμάτημα: Ctrl+C
+
+## Δοκιμή χωρίς οθόνες (στο PC, με emulator)
+```bash
+pip install luma.emulator pygame pillow psutil
+python oled_stats.py --emulate     # screen 1
+python game_stats.py --emulate     # screen 2
+```
 
 ---
 
-## 11. Autostart στο boot (systemd)
-Αντίγραψε το service αρχείο και ενεργοποίησέ το:
-```bash
-sudo cp ~/retropie-oled-monitor/retropie-oled-monitor.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable retropie-oled-monitor.service
-sudo systemctl start retropie-oled-monitor.service
-```
-Έλεγχος / διαχείριση:
-```bash
-systemctl status retropie-oled-monitor.service   # κατάσταση
-journalctl -u retropie-oled-monitor.service -f   # logs ζωντανά
-sudo systemctl restart retropie-oled-monitor.service
-sudo systemctl stop retropie-oled-monitor.service
-sudo systemctl disable retropie-oled-monitor.service   # να μη ξεκινά στο boot
-```
-
-> Σημείωση: το service τρέχει ως χρήστης `pi` από τον φάκελο `/home/pi/retropie-oled-monitor`.
-> Αν ο χρήστης/φάκελός σου είναι διαφορετικός, διόρθωσε το `.service` αρχείο.
+### Σημειώσεις
+- Αν το βήμα 6 βγάλει «No such file or directory», ο φάκελος `/opt/retropie/configs/all/` δεν υπάρχει — δεν είναι σωστό RetroPie image.
+- Αν οι οθόνες δεν ανιχνεύονται (`i2cdetect` δεν δείχνει `3c`), έλεγξε καλωδίωση + ότι μπήκαν οι 2 γραμμές στο config.txt.
+- Το service τρέχει ως ο χρήστης σου (το βήμα 7 το προσαρμόζει αυτόματα).
