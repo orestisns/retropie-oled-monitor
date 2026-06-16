@@ -13,7 +13,9 @@ RetroPie OLED Monitor — οδηγεί ΚΑΙ τις δύο οθόνες με σ
 Τρέξιμο στο Pi:
     python3 monitor.py
 """
+import os
 import threading
+import traceback
 from PIL import ImageFont
 from luma.core.render import canvas
 
@@ -26,9 +28,21 @@ def _blank(device):
         pass
 
 
+def _guard(fn):
+    # Αν ένα thread κρασάρει, τερματίζει όλη τη διεργασία ώστε το systemd
+    # να κάνει restart (αλλιώς μία οθόνη θα έμενε νεκρή σιωπηλά).
+    def wrapped(*args):
+        try:
+            fn(*args)
+        except Exception:
+            traceback.print_exc()
+            os._exit(1)
+    return wrapped
+
+
 def _both(target_a, args_a, target_b, args_b):
-    ta = threading.Thread(target=target_a, args=args_a, daemon=True)
-    tb = threading.Thread(target=target_b, args=args_b, daemon=True)
+    ta = threading.Thread(target=_guard(target_a), args=args_a, daemon=True)
+    tb = threading.Thread(target=_guard(target_b), args=args_b, daemon=True)
     ta.start()
     tb.start()
     ta.join()

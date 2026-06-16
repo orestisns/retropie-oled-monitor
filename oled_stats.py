@@ -13,7 +13,7 @@ OLED System Stats (128x64, SSD1306) — Screen 1.
 import os, sys, time, math, random
 
 # Ξαναχρησιμοποιούμε τη "λογική" από το terminal script
-from stats import cpu_temp, throttled_status, emulation_running, uptime_str
+from stats import cpu_temp, throttled_status, uptime_str
 import psutil
 
 
@@ -160,7 +160,6 @@ def ctext(draw, font, y, text):
 
 
 def splash(device, font, hold=5.0):
-    from luma.core.render import canvas
     # Half-Life logo με pixel-reveal animation (size=67 -> 58px, ίδιο με aperture)
     pixel_reveal(device, lambda d: draw_halflife(d, 64, 32, 67), hold=hold)
 
