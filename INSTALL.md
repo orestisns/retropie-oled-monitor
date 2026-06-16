@@ -1,7 +1,7 @@
-# Εγκατάσταση (όλα με εντολές terminal)
+# Εγκατάσταση στο RetroPie (όλα με εντολές terminal)
 
-> Όλα γίνονται γράφοντας εντολές — χωρίς χειροκίνητο editing αρχείων.
-> Η καλωδίωση των οθονών γίνεται ξεχωριστά (βλ. README).
+> Αποκλειστικά για **RetroPie** (Raspberry Pi). Όλα γίνονται γράφοντας εντολές —
+> χωρίς χειροκίνητο editing αρχείων. Η καλωδίωση των οθονών γίνεται ξεχωριστά (βλ. README).
 
 ## Γρήγορη εγκατάσταση (copy-paste όλα μαζί)
 
@@ -71,13 +71,6 @@ cd ~/retropie-oled-monitor && python3 monitor.py
 cd ~/retropie-oled-monitor
 git pull
 sudo systemctl restart retropie-oled-monitor.service
-```
-
-## Δοκιμή χωρίς οθόνες (στο PC, με emulator)
-```bash
-pip install luma.emulator pygame pillow psutil
-python oled_stats.py --emulate     # screen 1
-python game_stats.py --emulate     # screen 2
 ```
 
 ---
