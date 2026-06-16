@@ -72,12 +72,9 @@ def marquee(text, width, pos):
     return (s + s)[pos:pos + width]
 
 
-def main():
+def run(device, font):
+    # Aperture splash -> live game stats (καλείται και από το monitor.py)
     from luma.core.render import canvas
-    from PIL import ImageFont
-
-    device = get_device(port=4)        # Οθόνη 2 (game) -> /dev/i2c-4
-    font = ImageFont.load_default()
 
     aperture_splash(device, font, hold=10.0)
 
@@ -124,6 +121,12 @@ def main():
 
         scroll += 1
         time.sleep(0.4)
+
+
+def main():
+    from PIL import ImageFont
+    device = get_device(port=4)        # Οθόνη 2 (game) -> /dev/i2c-4
+    run(device, ImageFont.load_default())
 
 
 if __name__ == "__main__":

@@ -163,12 +163,9 @@ def row(draw, font, y, label, value, pct):
     draw.text((100, y), value, font=font, fill="white")
 
 
-def main():
+def run(device, font):
+    # Boot -> splash -> live system stats (καλείται και από το monitor.py)
     from luma.core.render import canvas
-    from PIL import ImageFont
-
-    device = get_device(port=3)        # Οθόνη 1 (system) -> /dev/i2c-3
-    font = ImageFont.load_default()
 
     boot_sequence(device, font)
     splash(device, font, hold=5.0)
@@ -196,6 +193,12 @@ def main():
             row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
 
         time.sleep(1)
+
+
+def main():
+    from PIL import ImageFont
+    device = get_device(port=3)        # Οθόνη 1 (system) -> /dev/i2c-3
+    run(device, ImageFont.load_default())
 
 
 if __name__ == "__main__":
