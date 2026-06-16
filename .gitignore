@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+game_status.txt
+.venv/
+venv/
