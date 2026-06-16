@@ -17,15 +17,20 @@ from stats import cpu_temp, throttled_status, emulation_running, uptime_str
 import psutil
 
 
-def get_device():
-    """Επιλέγει συσκευή: emulator στο PC, πραγματική SSD1306 στο Pi."""
+def get_device(port=1):
+    """Επιλέγει συσκευή: emulator στο PC, πραγματική SSD1306 στο Pi.
+
+    port = ο αριθμός του I2C bus στο Pi:
+        3 -> Οθόνη 1 (system)  [software I2C, GPIO23/24]
+        4 -> Οθόνη 2 (game)    [software I2C, GPIO22/27]
+    """
     if "--emulate" in sys.argv or os.name == "nt":
         from luma.emulator.device import pygame
         return pygame(width=128, height=64, scale=5, mode="1",
                       transform="smoothscale")
     from luma.core.interface.serial import i2c
     from luma.oled.device import ssd1306
-    serial = i2c(port=1, address=0x3C)
+    serial = i2c(port=port, address=0x3C)
     return ssd1306(serial, width=128, height=64)
 
 
@@ -162,7 +167,7 @@ def main():
     from luma.core.render import canvas
     from PIL import ImageFont
 
-    device = get_device()
+    device = get_device(port=3)        # Οθόνη 1 (system) -> /dev/i2c-3
     font = ImageFont.load_default()
 
     boot_sequence(device, font)

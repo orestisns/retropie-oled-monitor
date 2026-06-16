@@ -76,7 +76,7 @@ def main():
     from luma.core.render import canvas
     from PIL import ImageFont
 
-    device = get_device()
+    device = get_device(port=4)        # Οθόνη 2 (game) -> /dev/i2c-4
     font = ImageFont.load_default()
 
     aperture_splash(device, font, hold=10.0)
