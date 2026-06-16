@@ -1,0 +1,14 @@
+[Unit]
+Description=RetroPie OLED Monitor (system + game stats on two OLEDs)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/retropie-oled-monitor
+ExecStart=/usr/bin/python3 /home/pi/retropie-oled-monitor/monitor.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
