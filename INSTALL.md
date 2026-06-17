@@ -13,6 +13,15 @@ chmod +x install.sh
 ```
 Then: wire the displays and `sudo reboot`.
 
+### If `install.sh` fails on the Python libs (EOL / QEMU)
+On EOL systems where piwheels has no matching wheel (pip tries to compile and
+fails with `Python.h: No such file or directory`), use the apt backup instead.
+It repoints apt to the archive and installs the build tools so pip can compile:
+```bash
+chmod +x install-apt.sh
+./install-apt.sh
+```
+
 ---
 
 ## Or manually (copy-paste all at once)
