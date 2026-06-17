@@ -3,7 +3,19 @@
 > Αποκλειστικά για **RetroPie** (Raspberry Pi). Όλα γίνονται γράφοντας εντολές —
 > χωρίς χειροκίνητο editing αρχείων. Η καλωδίωση των οθονών γίνεται ξεχωριστά (βλ. README).
 
-## Γρήγορη εγκατάσταση (copy-paste όλα μαζί)
+## Αυτόματο script (προτεινόμενο)
+Δείχνει κάθε βήμα ξεχωριστά + πληροφορίες/σφάλματα:
+```bash
+cd ~ && git clone https://github.com/orestisns/retropie-oled-monitor.git
+cd ~/retropie-oled-monitor
+chmod +x install.sh
+./install.sh
+```
+Μετά: καλωδίωσε τις οθόνες και `sudo reboot`.
+
+---
+
+## Ή χειροκίνητα (copy-paste όλα μαζί)
 
 ```bash
 # 1) Ενημέρωση + πακέτα συστήματος
