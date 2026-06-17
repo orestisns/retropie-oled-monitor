@@ -41,8 +41,8 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
   python3 /tmp/get-pip.py --user
 fi
 
-# 5) Python libraries (from PyPI/piwheels - work despite EOL apt)
-python3 -m pip install --user luma.oled pillow psutil
+# 5) Python libraries (prebuilt wheels from piwheels; pillow<10 for py3.7/Buster)
+python3 -m pip install --user --prefer-binary --extra-index-url https://www.piwheels.org/simple "pillow<10" luma.oled psutil
 python3 -c "import PIL, psutil, luma.oled; print('python libs OK')"
 
 # 6) Install game hooks (for screen 2)

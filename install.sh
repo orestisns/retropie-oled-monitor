@@ -89,9 +89,12 @@ fi
 
 # --- Step 4: Python libraries ---
 step "4/5  Python libraries (luma.oled, pillow, psutil)"
-if python3 -m pip install --user luma.oled pillow psutil \
-   || python3 -m pip install --user --break-system-packages luma.oled pillow psutil \
-   || python3 -m pip install luma.oled pillow psutil; then
+info "Using prebuilt wheels (piwheels); pillow<10 for Python 3.7 (Buster) compatibility"
+# --prefer-binary: never compile from source
+# piwheels: official Raspberry Pi wheel host (works on EOL Buster/py3.7)
+# pillow<10: Pillow 10+ dropped Python 3.7
+PIPW="--extra-index-url https://www.piwheels.org/simple"
+if python3 -m pip install --user --prefer-binary $PIPW "pillow<10" luma.oled psutil; then
     if python3 -c "import PIL, psutil, luma.oled" >/dev/null 2>&1; then
         ok "Python libraries installed & importable"
     else
