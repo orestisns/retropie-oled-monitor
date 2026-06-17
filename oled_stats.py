@@ -34,6 +34,33 @@ def get_device(port=1):
     return ssd1306(serial, width=128, height=64)
 
 
+class Toggle:
+    """One button that toggles a screen between page 0 and page 1.
+    Real button on the Pi (BCM pin -> GND); auto-toggle on PC for preview."""
+    def __init__(self, pin):
+        self.page = 0
+        self._auto_t = time.time()
+        self._gpio = None
+        try:
+            import RPi.GPIO as GPIO
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(pin, GPIO.FALLING,
+                                  callback=self._press, bouncetime=300)
+            self._gpio = GPIO
+        except Exception:
+            self._gpio = None   # PC / no GPIO
+
+    def _press(self, channel):
+        self.page ^= 1
+
+    def poll(self):
+        # No real button (PC) -> auto-toggle every 5s for preview
+        if self._gpio is None and time.time() - self._auto_t > 5:
+            self.page ^= 1
+            self._auto_t = time.time()
+
+
 def throttle_short(txt):
     # Short code for the header
     if txt == "OK":
@@ -179,11 +206,15 @@ def row(draw, font, y, label, value, pct):
     draw.text((100, y), value, font=font, fill="white")
 
 
-def stats_loop(device, font):
-    # Only the live system stats (no boot/splash)
+def stats_loop(device, font, pager=None):
+    # Live system stats with one-button page toggle (no boot/splash)
     from luma.core.render import canvas
 
+    if pager is None:
+        pager = Toggle(5)          # GPIO5 -> screen 1 (system)
+
     while True:
+        pager.poll()
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
@@ -194,16 +225,19 @@ def stats_loop(device, font):
         temp_val = f"{temp:.0f}C" if temp is not None else "--"
 
         with canvas(device) as draw:
-            # Header: uptime on the left + throttle code on the right
-            draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
-            thr_code = "T:" + throttle_short(thr_txt)
-            draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
-            draw.line((4, 12, 123, 12), fill="white")
+            if pager.page == 1:
+                ctext(draw, font, 26, "PAGE 2")
+            else:
+                # Header: uptime on the left + throttle code on the right
+                draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
+                thr_code = "T:" + throttle_short(thr_txt)
+                draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
+                draw.line((4, 12, 123, 12), fill="white")
 
-            row(draw, font, 16, "CPU", f"{cpu:.0f}%", cpu)
-            row(draw, font, 28, "TMP", temp_val, temp_pct)
-            row(draw, font, 40, "RAM", f"{mem.percent:.0f}%", mem.percent)
-            row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
+                row(draw, font, 16, "CPU", f"{cpu:.0f}%", cpu)
+                row(draw, font, 28, "TMP", temp_val, temp_pct)
+                row(draw, font, 40, "RAM", f"{mem.percent:.0f}%", mem.percent)
+                row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
 
         time.sleep(1)
 

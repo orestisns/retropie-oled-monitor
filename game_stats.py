@@ -13,6 +13,9 @@ Reads the game state from a key=value file:
 
 On the Pi the file is written by runcommand-onstart.sh (see notes).
 
+One button toggles the page: GPIO6 (pin 31) -> GND. Press = PAGE 2, press
+again = back to the stats. On PC (--emulate) the page auto-toggles for preview.
+
 Run on PC (simulation):
     python game_stats.py --emulate
 Run on Pi:
@@ -20,8 +23,8 @@ Run on Pi:
 """
 import os, time, json
 
-# Reuse the drawing helpers from screen 1
-from oled_stats import get_device, draw_aperture, pixel_reveal
+# Reuse the drawing helpers + Toggle from screen 1
+from oled_stats import get_device, draw_aperture, pixel_reveal, ctext, Toggle
 
 STATUS_FILE = os.environ.get(
     "GAME_STATUS_FILE",
@@ -31,6 +34,8 @@ STATUS_FILE = os.environ.get(
 # Total play time per game (survives reboot)
 PLAYTIMES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "playtimes.json")
+
+GAME_BUTTON_PIN = 6   # BCM GPIO6 = physical pin 31 -> screen 2 (game)
 
 
 def load_totals():
@@ -97,20 +102,44 @@ def marquee(text, width, pos):
     return (s + s)[pos:pos + width]
 
 
-def stats_loop(device, font):
-    # Only the live game stats (no splash)
+def draw_game_page(draw, font, d, active_start, total_secs, scroll):
+    # Page 0: live game stats (or aperture logo when idle)
+    if not d.get("game"):
+        draw_aperture(draw, 64, 32, 28.5)
+        return
+    game = d.get("game", "?")
+    system = d.get("system", "?")
+    core = d.get("core", "?")
+    status = d.get("status", "PLAYING").upper()
+
+    draw.text((4, 2), status[:14], font=font, fill="white")
+    clock = time.strftime("%H:%M")
+    draw.text((124 - len(clock) * 6, 2), clock, font=font, fill="white")
+    draw.line((4, 12, 123, 12), fill="white")
+    draw.text((4, 16), marquee(game, 20, scroll), font=font, fill="white")
+    draw.text((4, 28), f"{system} / {core}"[:20], font=font, fill="white")
+    draw.text((4, 40), f"PLAY  {fmt_play(active_start)}", font=font, fill="white")
+    draw.text((4, 52), f"TOTAL {fmt_hms(total_secs)}", font=font, fill="white")
+
+
+def stats_loop(device, font, pager=None):
+    # Live game stats with page switching (no splash)
     from luma.core.render import canvas
 
-    totals = load_totals()      # {game: total seconds}
-    active_game = None           # which game we are currently counting
-    active_start = None          # epoch start of current session
+    if pager is None:
+        pager = Toggle(GAME_BUTTON_PIN)
+    totals = load_totals()
+    active_game = None
+    active_start = None
     scroll = 0
 
     while True:
+        pager.poll()
         d = read_status()
         playing = bool(d.get("game"))
         now = time.time()
 
+        total_secs = 0
         if playing:
             game = d.get("game", "?")
             try:
@@ -118,56 +147,31 @@ def stats_loop(device, font):
             except Exception:
                 start = now
             if game != active_game:
-                # game changed -> commit the previous session
                 if active_game is not None:
                     totals[active_game] = totals.get(active_game, 0) + (now - active_start)
                     save_totals(totals)
                 active_game, active_start = game, start
-            session = now - active_start
-            total_secs = totals.get(game, 0) + session
+            total_secs = totals.get(game, 0) + (now - active_start)
         else:
-            # game ended -> commit the session that just closed
             if active_game is not None:
                 totals[active_game] = totals.get(active_game, 0) + (now - active_start)
                 save_totals(totals)
                 active_game = active_start = None
 
         with canvas(device) as draw:
-            if not playing:
-                draw_aperture(draw, 64, 32, 28.5)
+            if pager.page == 1:
+                ctext(draw, font, 26, "PAGE 2")
             else:
-                system = d.get("system", "?")
-                core = d.get("core", "?")
-                status = d.get("status", "PLAYING").upper()
-
-                # Header: status on the left + clock on the right
-                draw.text((4, 2), status[:14], font=font, fill="white")
-                clock = time.strftime("%H:%M")
-                draw.text((124 - len(clock) * 6, 2), clock,
-                          font=font, fill="white")
-                draw.line((4, 12, 123, 12), fill="white")
-
-                # Game name (marquee if long)
-                draw.text((4, 16), marquee(game, 20, scroll),
-                          font=font, fill="white")
-                # System / core
-                draw.text((4, 28), f"{system} / {core}"[:20],
-                          font=font, fill="white")
-                # Current session time
-                draw.text((4, 40), f"PLAY  {fmt_play(active_start)}",
-                          font=font, fill="white")
-                # Total time (all sessions)
-                draw.text((4, 52), f"TOTAL {fmt_hms(total_secs)}",
-                          font=font, fill="white")
+                draw_game_page(draw, font, d, active_start, total_secs, scroll)
 
         scroll += 1
         time.sleep(0.4)
 
 
-def run(device, font):
+def run(device, font, pager=None):
     # Aperture splash -> live game stats (standalone)
     aperture_splash(device, font, hold=10.0)
-    stats_loop(device, font)
+    stats_loop(device, font, pager)
 
 
 def main():
