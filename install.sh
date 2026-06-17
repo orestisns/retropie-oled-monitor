@@ -101,7 +101,8 @@ if python3 -m pip install --user --prefer-binary $PIPW "pillow<10" luma.oled psu
         fail "Installed but not importable - check pip output above"
     fi
 else
-    fail "pip install failed (check internet / piwheels)"
+    fail "pip install failed - no matching wheel (common under QEMU)."
+    info "On a real Pi this works. Otherwise use the apt backup: ./install-apt.sh"
 fi
 
 # --- Step 5a: runcommand hooks (game stats) ---
