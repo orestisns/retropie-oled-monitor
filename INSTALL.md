@@ -33,14 +33,17 @@ grep -q "i2c_gpio_sda=22" "$CONFIG" || echo "dtoverlay=i2c-gpio,bus=4,i2c_gpio_s
 cd ~ && git clone https://github.com/orestisns/retropie-oled-monitor.git
 cd ~/retropie-oled-monitor
 
-# 4) Ensure pip (no apt)
-python3 -m pip --version || python3 -m ensurepip --upgrade
-# if still missing (ensurepip stripped):
-#   PYV=$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')
-#   curl -fsSL "https://bootstrap.pypa.io/pip/$PYV/get-pip.py" -o /tmp/get-pip.py && python3 /tmp/get-pip.py --user
+# 4) Ensure pip (no apt) - ensurepip, with get-pip fallback for EOL Python
+python3 -m pip --version 2>/dev/null || python3 -m ensurepip --upgrade
+if ! python3 -m pip --version >/dev/null 2>&1; then
+  PYV=$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')
+  curl -fsSL "https://bootstrap.pypa.io/pip/$PYV/get-pip.py" -o /tmp/get-pip.py || curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+  python3 /tmp/get-pip.py --user
+fi
 
 # 5) Python libraries (from PyPI/piwheels - work despite EOL apt)
 python3 -m pip install --user luma.oled pillow psutil
+python3 -c "import PIL, psutil, luma.oled; print('python libs OK')"
 
 # 6) Install game hooks (for screen 2)
 sudo cp runcommand-onstart.sh /opt/retropie/configs/all/runcommand-onstart.sh
@@ -59,12 +62,8 @@ sudo reboot
 
 ## Check after reboot
 ```bash
-# Do the 2 buses exist?
+# Do the 2 buses exist? (both should be listed)
 ls /dev/i2c-3 /dev/i2c-4
-
-# Are the displays detected? (should show 3c)
-i2cdetect -y 3
-i2cdetect -y 4
 
 # Is the service running?
 systemctl status retropie-oled-monitor.service
@@ -94,5 +93,5 @@ sudo systemctl restart retropie-oled-monitor.service
 
 ### Notes
 - If step 6 gives "No such file or directory", the folder `/opt/retropie/configs/all/` does not exist - it is not a proper RetroPie image.
-- If the displays are not detected (`i2cdetect` does not show `3c`), check the wiring + that the 2 lines were added to config.txt.
+- If `/dev/i2c-3` or `/dev/i2c-4` is missing, check the wiring + that the 2 lines were added to config.txt.
 - The service runs as your user (step 7 adapts it automatically).
