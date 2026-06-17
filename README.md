@@ -23,7 +23,8 @@ Both logos appear with a pixel-reveal animation, at the same size (58x58).
 | `runcommand-onstart.sh` | RetroPie hook: writes `/tmp/game_status` when a game starts |
 | `runcommand-onend.sh` | RetroPie hook: clears the state when a game exits |
 | `retropie-oled-monitor.service` | systemd service for autostart at boot |
-| `install.sh` | Step-by-step installer |
+| `install.sh` | Step-by-step installer (no apt; pip via piwheels). Stops on first error. |
+| `install-apt.sh` | Backup installer (apt archive + build deps) for when piwheels has no wheel |
 | `INSTALL.md` | Detailed installation instructions |
 
 ## Wiring (software I2C, 2 buses)
@@ -48,6 +49,12 @@ cd ~/retropie-oled-monitor
 chmod +x install.sh
 ./install.sh
 ```
+`install.sh` runs 5 steps (enable I2C, add the I2C buses, ensure pip, install the
+Python libs from piwheels, install hooks + autostart). It **uses no apt** (RetroPie
+images are often EOL) and **stops on the first failure**. On success it tells you to
+reboot and how to verify. If the Python libs step fails (e.g. piwheels has no wheel),
+run the backup `./install-apt.sh` instead.
+
 See [INSTALL.md](INSTALL.md) for full details. Then wire the displays and `sudo reboot`.
 
 ## Test on a PC (emulator, separately)

@@ -18,7 +18,7 @@ Run on PC (simulation):
 Run on Pi:
     python3 game_stats.py
 """
-import os, sys, time, json
+import os, time, json
 
 # Reuse the drawing helpers from screen 1
 from oled_stats import get_device, draw_aperture, pixel_reveal
