@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-RetroPie OLED Monitor — οδηγεί ΚΑΙ τις δύο οθόνες με συγχρονισμένη ροή.
+RetroPie OLED Monitor - drives BOTH displays with a synchronized flow.
 
-  Οθόνη 1 (system) -> I2C bus 3  (GPIO23/24)
-  Οθόνη 2 (game)   -> I2C bus 4  (GPIO22/27)
+  Screen 1 (system) -> I2C bus 3  (GPIO23/24)
+  Screen 2 (game)   -> I2C bus 4  (GPIO22/27)
 
-Ροή στο ξεκίνημα:
-  1) Screen 1: boot sequence   (screen 2 κενή)
-  2) Και οι δύο: logo με pixel-reveal animation (ταυτόχρονα)
-  3) Και οι δύο: live stats     (ταυτόχρονα, για πάντα)
+Startup flow:
+  1) Screen 1: boot sequence   (screen 2 blank)
+  2) Both: logo with pixel-reveal animation (simultaneously)
+  3) Both: live stats          (simultaneously, forever)
 
-Τρέξιμο στο Pi:
+Run on the Pi:
     python3 monitor.py
 """
 import os
@@ -29,8 +29,8 @@ def _blank(device):
 
 
 def _guard(fn):
-    # Αν ένα thread κρασάρει, τερματίζει όλη τη διεργασία ώστε το systemd
-    # να κάνει restart (αλλιώς μία οθόνη θα έμενε νεκρή σιωπηλά).
+    # If a thread crashes, exit the whole process so systemd restarts it
+    # (otherwise one screen would silently stay dead).
     def wrapped(*args):
         try:
             fn(*args)
@@ -54,17 +54,17 @@ def main():
     dev_system = oled_stats.get_device(port=3)      # /dev/i2c-3
     dev_game = oled_stats.get_device(port=4)        # /dev/i2c-4
 
-    # 1) Boot sequence στην οθόνη 1, η οθόνη 2 κενή
+    # 1) Boot sequence on screen 1, screen 2 blank
     _blank(dev_game)
     oled_stats.boot_sequence(dev_system, font)
 
-    # 2) Logo με animation και στις δύο ταυτόχρονα
+    # 2) Logo with animation on both, simultaneously
     _both(
         oled_stats.splash, (dev_system, font, 5.0),
         game_stats.aperture_splash, (dev_game, font, 5.0),
     )
 
-    # 3) Live stats και στις δύο ταυτόχρονα (ατέρμονα)
+    # 3) Live stats on both, simultaneously (forever)
     _both(
         oled_stats.stats_loop, (dev_system, font),
         game_stats.stats_loop, (dev_game, font),

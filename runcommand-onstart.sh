@@ -1,16 +1,16 @@
 #!/bin/bash
-# RetroPie hook: γράφει την κατάσταση παιχνιδιού για τα OLED game stats (screen 2).
-# Το RetroPie καλεί αυτό το script αυτόματα όταν ξεκινά ένα παιχνίδι.
+# RetroPie hook: writes the game state for the OLED game stats (screen 2).
+# RetroPie calls this script automatically when a game starts.
 #
-# Ορίσματα από το runcommand:
-#   $1 = system     (π.χ. nes, snes, psx)
-#   $2 = emulator   (π.χ. lr-fceumm, pcsx_rearmed)
-#   $3 = rom path   (πλήρης διαδρομή του ROM)
+# Arguments from runcommand:
+#   $1 = system     (e.g. nes, snes, psx)
+#   $2 = emulator   (e.g. lr-fceumm, pcsx_rearmed)
+#   $3 = rom path   (full path of the ROM)
 #   $4 = commandline
 #
-# Εγκατάσταση: αντίγραψέ το ως
+# Install: copy it as
 #   /opt/retropie/configs/all/runcommand-onstart.sh
-# και κάνε το εκτελέσιμο:  chmod +x runcommand-onstart.sh
+# and make it executable:  chmod +x runcommand-onstart.sh
 
 SYSTEM="$1"
 EMULATOR="$2"
@@ -18,11 +18,11 @@ ROMPATH="$3"
 
 STATUS_FILE="/tmp/game_status"
 
-# Όνομα παιχνιδιού: filename χωρίς κατάληξη
+# Game name: filename without extension
 GAME="$(basename "$ROMPATH")"
 GAME="${GAME%.*}"
 
-# Core: αφαίρεση προθέματος "lr-" (libretro)
+# Core: strip the "lr-" prefix (libretro)
 CORE="${EMULATOR#lr-}"
 
 {

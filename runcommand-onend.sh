@@ -1,10 +1,10 @@
 #!/bin/bash
-# RetroPie hook: καθαρίζει την κατάσταση όταν κλείνει το παιχνίδι.
-# Το RetroPie το καλεί αυτόματα μόλις βγεις από ένα παιχνίδι.
-# Χωρίς το αρχείο, το screen 2 δείχνει το aperture logo (idle).
+# RetroPie hook: clears the state when a game exits.
+# RetroPie calls it automatically as soon as you exit a game.
+# Without the file, screen 2 shows the aperture logo (idle).
 #
-# Εγκατάσταση: αντίγραψέ το ως
+# Install: copy it as
 #   /opt/retropie/configs/all/runcommand-onend.sh
-# και κάνε το εκτελέσιμο:  chmod +x runcommand-onend.sh
+# and make it executable:  chmod +x runcommand-onend.sh
 
 rm -f /tmp/game_status

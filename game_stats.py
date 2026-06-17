@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-OLED Game / Emulation Stats (128x64, SSD1306) — Screen 2.
+OLED Game / Emulation Stats (128x64, SSD1306) - Screen 2.
 
-Διαβάζει την κατάσταση παιχνιδιού από αρχείο key=value:
+Reads the game state from a key=value file:
     game=Super Mario Bros
     system=NES
     core=fceumm
@@ -11,16 +11,16 @@ OLED Game / Emulation Stats (128x64, SSD1306) — Screen 2.
     status=PLAYING
     start=<epoch seconds>
 
-Στο Pi το αρχείο το γράφει το runcommand-onstart.sh (βλ. σχόλια κάτω).
+On the Pi the file is written by runcommand-onstart.sh (see notes).
 
-Τρέξιμο στο PC (προσομοίωση):
+Run on PC (simulation):
     python game_stats.py --emulate
-Τρέξιμο στο Pi:
+Run on Pi:
     python3 game_stats.py
 """
 import os, sys, time, json
 
-# Ξαναχρησιμοποιούμε τις γραφικές βοηθητικές από το screen 1
+# Reuse the drawing helpers from screen 1
 from oled_stats import get_device, draw_aperture, pixel_reveal
 
 STATUS_FILE = os.environ.get(
@@ -28,7 +28,7 @@ STATUS_FILE = os.environ.get(
     "game_status.txt" if os.name == "nt" else "/tmp/game_status",
 )
 
-# Συνολικός χρόνος ανά παιχνίδι (επιβιώνει reboot)
+# Total play time per game (survives reboot)
 PLAYTIMES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "playtimes.json")
 
@@ -57,7 +57,7 @@ def fmt_hms(secs):
 
 
 def aperture_splash(device, font, hold=10.0):
-    # Aperture logo με pixel-reveal animation (κοινή συνάρτηση)
+    # Aperture logo with pixel-reveal animation (shared function)
     pixel_reveal(device, lambda d: draw_aperture(d, 64, 32, 28.5), hold=hold)
 
 
@@ -89,7 +89,7 @@ def fmt_play(start):
 
 
 def marquee(text, width, pos):
-    # Κυλιόμενο κείμενο αν δεν χωράει (αλλιώς ως έχει)
+    # Scrolling text if it does not fit (otherwise as-is)
     if len(text) <= width:
         return text
     s = text + "   "
@@ -98,12 +98,12 @@ def marquee(text, width, pos):
 
 
 def stats_loop(device, font):
-    # Μόνο το live game stats (χωρίς splash)
+    # Only the live game stats (no splash)
     from luma.core.render import canvas
 
-    totals = load_totals()      # {game: συνολικά δευτερόλεπτα}
-    active_game = None           # ποιο παιχνίδι μετράμε τώρα
-    active_start = None          # epoch έναρξης τρέχοντος session
+    totals = load_totals()      # {game: total seconds}
+    active_game = None           # which game we are currently counting
+    active_start = None          # epoch start of current session
     scroll = 0
 
     while True:
@@ -118,7 +118,7 @@ def stats_loop(device, font):
             except Exception:
                 start = now
             if game != active_game:
-                # άλλαξε παιχνίδι -> κατοχύρωσε το προηγούμενο session
+                # game changed -> commit the previous session
                 if active_game is not None:
                     totals[active_game] = totals.get(active_game, 0) + (now - active_start)
                     save_totals(totals)
@@ -126,7 +126,7 @@ def stats_loop(device, font):
             session = now - active_start
             total_secs = totals.get(game, 0) + session
         else:
-            # τέλος παιχνιδιού -> κατοχύρωσε το session που έκλεισε
+            # game ended -> commit the session that just closed
             if active_game is not None:
                 totals[active_game] = totals.get(active_game, 0) + (now - active_start)
                 save_totals(totals)
@@ -140,23 +140,23 @@ def stats_loop(device, font):
                 core = d.get("core", "?")
                 status = d.get("status", "PLAYING").upper()
 
-                # Header: κατάσταση αριστερά + ώρα πάνω δεξιά
+                # Header: status on the left + clock on the right
                 draw.text((4, 2), status[:14], font=font, fill="white")
                 clock = time.strftime("%H:%M")
                 draw.text((124 - len(clock) * 6, 2), clock,
                           font=font, fill="white")
                 draw.line((4, 12, 123, 12), fill="white")
 
-                # Όνομα παιχνιδιού (marquee αν μακρύ)
+                # Game name (marquee if long)
                 draw.text((4, 16), marquee(game, 20, scroll),
                           font=font, fill="white")
-                # Σύστημα / core
+                # System / core
                 draw.text((4, 28), f"{system} / {core}"[:20],
                           font=font, fill="white")
-                # Χρόνος τρέχοντος session
+                # Current session time
                 draw.text((4, 40), f"PLAY  {fmt_play(active_start)}",
                           font=font, fill="white")
-                # Συνολικός χρόνος (όλες οι φορές)
+                # Total time (all sessions)
                 draw.text((4, 52), f"TOTAL {fmt_hms(total_secs)}",
                           font=font, fill="white")
 
@@ -172,7 +172,7 @@ def run(device, font):
 
 def main():
     from PIL import ImageFont
-    device = get_device(port=4)        # Οθόνη 2 (game) -> /dev/i2c-4
+    device = get_device(port=4)        # Screen 2 (game) -> /dev/i2c-4
     run(device, ImageFont.load_default())
 
 

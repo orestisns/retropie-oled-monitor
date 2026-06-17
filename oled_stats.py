@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 """
-OLED System Stats (128x64, SSD1306) — Screen 1.
+OLED System Stats (128x64, SSD1306) - Screen 1.
 
-Τρέξιμο στο PC (παράθυρο-προσομοίωση):
+Run on PC (window simulation):
     pip install luma.emulator pygame pillow psutil
     python oled_stats.py --emulate
 
-Τρέξιμο στο Raspberry Pi (πραγματική OLED μέσω I2C):
+Run on Raspberry Pi (real OLED over I2C):
     pip3 install luma.oled pillow psutil
     python3 oled_stats.py
 """
 import os, sys, time, math, random
 
-# Ξαναχρησιμοποιούμε τη "λογική" από το terminal script
+# Reuse the "logic" from the terminal script
 from stats import cpu_temp, throttled_status, uptime_str
 import psutil
 
 
 def get_device(port=1):
-    """Επιλέγει συσκευή: emulator στο PC, πραγματική SSD1306 στο Pi.
+    """Select device: emulator on PC, real SSD1306 on the Pi.
 
-    port = ο αριθμός του I2C bus στο Pi:
-        3 -> Οθόνη 1 (system)  [software I2C, GPIO23/24]
-        4 -> Οθόνη 2 (game)    [software I2C, GPIO22/27]
+    port = the I2C bus number on the Pi:
+        3 -> Screen 1 (system)  [software I2C, GPIO23/24]
+        4 -> Screen 2 (game)    [software I2C, GPIO22/27]
     """
     if "--emulate" in sys.argv or os.name == "nt":
         from luma.emulator.device import pygame
@@ -35,7 +35,7 @@ def get_device(port=1):
 
 
 def throttle_short(txt):
-    # Σύντομος κωδικός για το header
+    # Short code for the header
     if txt == "OK":
         return "OK"
     if txt == "N/A":
@@ -54,7 +54,7 @@ def throttle_short(txt):
 
 
 def draw_aperture(draw, cx, cy, R, r=None):
-    # Aperture Science logo (camera-iris): συμπαγής άσπρος δίσκος + μαύρο διάφραγμα
+    # Aperture Science logo (camera-iris): solid white disc + black diaphragm
     if r is None:
         r = int(R * 0.42)
     draw.ellipse((cx - R, cy - R, cx + R, cy + R), fill="white")
@@ -71,7 +71,7 @@ def draw_aperture(draw, cx, cy, R, r=None):
     draw.polygon(pts, fill="black")
 
 
-# Half-Life logo — ακριβείς συντεταγμένες από το επίσημο SVG (viewBox 364.707)
+# Half-Life logo - exact coordinates from the official SVG (viewBox 364.707)
 _HL_VB_CENTER = 182.3535
 _HL_LAMBDA = [
     (223.864, 272.729), (185.256, 174.881), (128.653, 264.065),
@@ -84,7 +84,7 @@ _HL_RING_W = 34.0
 
 
 def pixel_reveal(device, render_fn, hold=5.0, steps=60, frame_delay=0.03):
-    # Σχεδιάζει με render_fn(draw) και αποκαλύπτει τα pixels με τυχαία σειρά
+    # Draw with render_fn(draw) and reveal the pixels in random order
     from PIL import Image, ImageDraw
     full = Image.new("1", (device.width, device.height))
     render_fn(ImageDraw.Draw(full))
@@ -108,7 +108,7 @@ def pixel_reveal(device, render_fn, hold=5.0, steps=60, frame_delay=0.03):
 
 
 def draw_halflife(draw, cx, cy, size):
-    # size = συνολικό μέγεθος του logo σε pixels. Μονόχρωμο (white) για OLED.
+    # size = overall logo size in pixels. Monochrome (white) for OLED.
     s = size / 364.707
     r = _HL_RING_R * s
     w = max(2, round(_HL_RING_W * s))
@@ -130,8 +130,8 @@ def render_boot_lines(device, font, shown):
 
 
 def boot_sequence(device, font):
-    # Boot lines: ο χρόνος μοιρασμένος στα checks, στο τέλος κρατάει 3''
-    # [label, result, delay] — το delay μετά από κάθε στάδιο
+    # Boot lines: time spread across the checks, holds 3s at the end
+    # [label, result, delay] - the delay after each step
     lines = [
         ["INIT SYSTEM", "OK", 1.5],
         ["CPU SENSORS", "OK", 1.2],
@@ -155,12 +155,12 @@ def boot_sequence(device, font):
 
 
 def ctext(draw, font, y, text):
-    # κεντραρισμένο κείμενο (default font ~6px/χαρακτήρα)
+    # centered text (default font ~6px/char)
     draw.text(((128 - len(text) * 6) // 2, y), text, font=font, fill="white")
 
 
 def splash(device, font, hold=5.0):
-    # Half-Life logo με pixel-reveal animation (size=67 -> 58px, ίδιο με aperture)
+    # Half-Life logo with pixel-reveal animation (size=67 -> 58px, same as aperture)
     pixel_reveal(device, lambda d: draw_halflife(d, 64, 32, 67), hold=hold)
 
 
@@ -180,21 +180,21 @@ def row(draw, font, y, label, value, pct):
 
 
 def stats_loop(device, font):
-    # Μόνο το live system stats (χωρίς boot/splash)
+    # Only the live system stats (no boot/splash)
     from luma.core.render import canvas
 
     while True:
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
-        temp = cpu_temp()                      # float °C ή None
+        temp = cpu_temp()                      # float C or None
         thr_txt, _ = throttled_status()
 
         temp_pct = (temp / 80.0 * 100.0) if temp is not None else 0.0
         temp_val = f"{temp:.0f}C" if temp is not None else "--"
 
         with canvas(device) as draw:
-            # Header: uptime αριστερά + throttle κωδικός δεξιά
+            # Header: uptime on the left + throttle code on the right
             draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
             thr_code = "T:" + throttle_short(thr_txt)
             draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
@@ -217,7 +217,7 @@ def run(device, font):
 
 def main():
     from PIL import ImageFont
-    device = get_device(port=3)        # Οθόνη 1 (system) -> /dev/i2c-3
+    device = get_device(port=3)        # Screen 1 (system) -> /dev/i2c-3
     run(device, ImageFont.load_default())
 
 

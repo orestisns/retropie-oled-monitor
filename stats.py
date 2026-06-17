@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 import os, sys, time, subprocess, psutil
 
-# ---- ANSI χρώματα ----
+# ---- ANSI colors ----
 GREEN  = "\033[32m"
-BRIGHT = GREEN          # ίδιο πράσινο παντού (όχι ξεχωριστό φωτεινό)
+BRIGHT = GREEN          # same green everywhere (no separate bright)
 AMBER  = "\033[33m"
 RED    = "\033[91m"
 DIM    = "\033[2m"
 RESET  = "\033[0m"
 
 def enable_ansi_windows():
-    # Ενεργοποίηση VT100 χρωμάτων στο Windows terminal
+    # Enable VT100 colors in the Windows terminal
     if os.name == "nt":
         try:
             import ctypes
@@ -23,7 +23,7 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 def cpu_temp():
-    # Δουλεύει στο Raspberry Pi· στα Windows επιστρέφει None
+    # Works on the Raspberry Pi; returns None on Windows
     try:
         out = subprocess.check_output(["vcgencmd", "measure_temp"]).decode()
         return float(out.strip().replace("temp=", "").replace("'C", ""))
@@ -45,7 +45,7 @@ EMU_NAMES = (
 )
 
 def emulation_running():
-    # True αν τρέχει κάποιος γνωστός emulator αυτή τη στιγμή
+    # True if a known emulator is currently running
     try:
         for p in psutil.process_iter(["name"]):
             n = (p.info["name"] or "").lower()
@@ -56,7 +56,7 @@ def emulation_running():
     return False
 
 def uptime_str():
-    # Πόση ώρα δουλεύει το σύστημα
+    # How long the system has been running
     try:
         secs = int(time.time() - psutil.boot_time())
         h, rem = divmod(secs, 3600)
@@ -69,7 +69,7 @@ def uptime_str():
         return "N/A"
 
 def throttled_status():
-    # Επιστρέφει (κείμενο, χρώμα). Μόνο στο Raspberry Pi (vcgencmd).
+    # Returns (text, color). Only on the Raspberry Pi (vcgencmd).
     try:
         out = subprocess.check_output(["vcgencmd", "get_throttled"]).decode()
         val = int(out.strip().split("=")[1], 16)
@@ -86,14 +86,14 @@ def throttled_status():
         flags.append("THROTTLED")
     if val & 0x8:
         flags.append("TEMP LIMIT")
-    if not flags:  # μόνο "has occurred" bits (παλιότερο συμβάν)
+    if not flags:  # only "has occurred" bits (past event)
         flags.append("PAST EVENT")
     return ", ".join(flags), RED
 
 def bar(percent, width=36):
     percent = max(0.0, min(100.0, percent))
     filled = int(round(width * percent / 100.0))
-    # χρώμα ανάλογα με το πόσο γεμάτο
+    # color depends on how full it is
     color = BRIGHT if percent < 60 else (AMBER if percent < 85 else RED)
     return f"{color}[{'|' * filled}{' ' * (width - filled)}]{RESET}"
 
@@ -121,7 +121,7 @@ M-       ,=;;;#:,      ,:#;;:=,       ,@
 """
 
 def type_out(text, delay=0.02, color=GREEN):
-    # Τυπώνει το κείμενο γράμμα-γράμμα (εφέ πληκτρολόγησης)
+    # Prints text character by character (typing effect)
     sys.stdout.write(color)
     for ch in text:
         sys.stdout.write(ch)
@@ -130,10 +130,10 @@ def type_out(text, delay=0.02, color=GREEN):
     sys.stdout.write(RESET + "\n")
     sys.stdout.flush()
 
-SPIN_DELAY = 0.18  # ίδια ταχύτητα περιστροφής spinner παντού
+SPIN_DELAY = 0.18  # same spinner rotation speed everywhere
 
 def boot_step(line, type_delay=0.03, think_cycles=3, think_delay=SPIN_DELAY):
-    # Τυπώνει τη γραμμή, δείχνει spinner "σκέψης", μετά γράφει το OK/PASSED
+    # Prints the line, shows a "thinking" spinner, then writes OK/PASSED
     split = line.rindex(" ") + 1
     prefix, result = line[:split], line[split:]
     sys.stdout.write(GREEN)
@@ -158,7 +158,7 @@ def boot_sequence():
     time.sleep(0.6)
     type_out("  -----------------------------------", 0.015)
     time.sleep(0.5)
-    # (γραμμή, think_cycles) — ίδια ταχύτητα, διαφορετικός αριθμός περιστροφών
+    # (line, think_cycles) - same speed, different number of rotations
     boot_lines = [
         ("  > INITIALIZING SYSTEM ..................... OK", 3),
         ("  > LOADING RETROPIE MONITOR v1.2 ........... OK", 2),
@@ -170,14 +170,14 @@ def boot_sequence():
         boot_step(ln, think_cycles=cyc)
         time.sleep(0.4)
 
-    # --- Βήμα ραδιενέργειας με προειδοποίηση που αναβοσβήνει ---
+    # --- Radiation step with blinking warning ---
     prefix = "  > MEASURING RADIATION LEVELS .............. "
     sys.stdout.write(GREEN)
     for ch in prefix:
         sys.stdout.write(ch)
         sys.stdout.flush()
         time.sleep(0.03)
-    # spinner "loading" αντί για στατική παύση
+    # "loading" spinner instead of a static pause
     frames = "|/-\\"
     for i in range(9):
         sys.stdout.write(frames[i % len(frames)])
@@ -185,7 +185,7 @@ def boot_sequence():
         time.sleep(SPIN_DELAY)
         sys.stdout.write("\b")
         sys.stdout.flush()
-    time.sleep(2.0)  # παύση μετά το spinner, πριν αρχίσει να αναβοσβήνει
+    time.sleep(2.0)  # pause after the spinner, before it starts blinking
     warn = "ABOVE NORMAL LEVELS!"
     for _ in range(2):
         sys.stdout.write(RED + warn + RESET)
@@ -214,7 +214,7 @@ def boot_sequence():
     time.sleep(1.0)
 
 def splash_logo(seconds=1.5):
-    # Boot screen: το σύμβολο εμφανίζεται γραμμή-γραμμή
+    # Boot screen: the symbol appears line by line
     clear_screen()
     print()
     art = BANNER.strip("\n").split("\n")
@@ -232,7 +232,7 @@ def main():
     boot_sequence()
     splash_logo()
     disk_path = "C:\\" if os.name == "nt" else "/"
-    psutil.cpu_percent(interval=None)  # προετοιμασία μέτρησης
+    psutil.cpu_percent(interval=None)  # prime the measurement
     line = "=" * 69
 
     first = True
@@ -269,7 +269,7 @@ def main():
 
         clear_screen()
         if first:
-            # Εμφάνιση σελίδας σταδιακά, από πάνω προς τα κάτω
+            # Reveal the page gradually, top to bottom
             for row in frame:
                 print(row)
                 sys.stdout.flush()
