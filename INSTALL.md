@@ -17,25 +17,30 @@ Then: wire the displays and `sudo reboot`.
 
 ## Or manually (copy-paste all at once)
 
-```bash
-# 1) Update + system packages
-sudo apt update && sudo apt full-upgrade -y
-sudo apt install -y python3-pip i2c-tools libjpeg-dev zlib1g-dev git
+> No apt is used (RetroPie images are often EOL and apt mirrors return 404).
+> pip is bootstrapped via ensurepip/get-pip; Python libs come from PyPI/piwheels.
 
-# 2) Enable I2C (no menu)
+```bash
+# 1) Enable I2C (no menu, no apt)
 sudo raspi-config nonint do_i2c 0
 
-# 3) Create the 2 software I2C buses in config.txt
+# 2) Create the 2 software I2C buses in config.txt
 CONFIG=/boot/firmware/config.txt; [ -f "$CONFIG" ] || CONFIG=/boot/config.txt
 grep -q "i2c_gpio_sda=23" "$CONFIG" || echo "dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=23,i2c_gpio_scl=24" | sudo tee -a "$CONFIG"
 grep -q "i2c_gpio_sda=22" "$CONFIG" || echo "dtoverlay=i2c-gpio,bus=4,i2c_gpio_sda=22,i2c_gpio_scl=27" | sudo tee -a "$CONFIG"
 
-# 4) Download the project
+# 3) Download the project
 cd ~ && git clone https://github.com/orestisns/retropie-oled-monitor.git
 cd ~/retropie-oled-monitor
 
-# 5) Python libraries
-pip3 install luma.oled pillow psutil || pip3 install --break-system-packages luma.oled pillow psutil
+# 4) Ensure pip (no apt)
+python3 -m pip --version || python3 -m ensurepip --upgrade
+# if still missing (ensurepip stripped):
+#   PYV=$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')
+#   curl -fsSL "https://bootstrap.pypa.io/pip/$PYV/get-pip.py" -o /tmp/get-pip.py && python3 /tmp/get-pip.py --user
+
+# 5) Python libraries (from PyPI/piwheels - work despite EOL apt)
+python3 -m pip install --user luma.oled pillow psutil
 
 # 6) Install game hooks (for screen 2)
 sudo cp runcommand-onstart.sh /opt/retropie/configs/all/runcommand-onstart.sh
