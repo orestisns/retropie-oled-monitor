@@ -207,35 +207,53 @@ def row(draw, font, y, label, value, pct):
     draw.text((100, y), value, font=font, fill="white")
 
 
-# Throttle code reference (shown as pages 2 & 3 on the system screen)
-THR_ENTRIES = [
-    ("OK", "all good"),
-    ("UV", "under-volt"),
-    ("FC", "freq cap"),
-    ("TH", "throttled"),
-    ("TL", "temp limit"),
-    ("PE", "past event"),
-    ("--", "N/A"),
-]
+# Metric graph with X-Y axes (one page per metric)
+AX_X = 20        # y-axis column (room for labels to its left)
+AX_TOP = 12      # top of plot
+AX_BOT = 60      # bottom of plot (x-axis)
+AX_RIGHT = 126   # right edge of plot
+GRAPH_W = AX_RIGHT - AX_X   # usable columns (time samples)
 
 
-def draw_throttle_page(draw, font, p):
-    # p = 0 -> entries 0..3, p = 1 -> entries 4..6
-    draw.text((4, 2), f"THROTTLE  {p + 1}/2", font=font, fill="white")
-    draw.line((4, 12, 123, 12), fill="white")
-    y = 16
-    for code, meaning in THR_ENTRIES[p * 4:(p + 1) * 4]:
-        draw.text((4, y), f"{code}  {meaning}", font=font, fill="white")
-        y += 12
+def draw_graph(draw, font, title, hist, cur_label, ymax_label="100"):
+    # hist holds 0..100 values (percent of range). Newest pinned to the right.
+    draw.text((0, 2), title, font=font, fill="white")
+    draw.text((124 - len(cur_label) * 6, 2), cur_label, font=font, fill="white")
+
+    # Axes
+    draw.line((AX_X, AX_TOP, AX_X, AX_BOT), fill="white")        # Y axis
+    draw.line((AX_X, AX_BOT, AX_RIGHT, AX_BOT), fill="white")    # X axis
+    draw.text((AX_X - 1 - len(ymax_label) * 6, AX_TOP - 3), ymax_label,
+              font=font, fill="white")
+    draw.text((AX_X - 1 - 6, AX_BOT - 9), "0", font=font, fill="white")
+    # mid gridline (50%)
+    ymid = (AX_TOP + AX_BOT) // 2
+    for x in range(AX_X + 2, AX_RIGHT, 4):
+        draw.point((x, ymid), fill="white")
+
+    data = hist[-GRAPH_W:]
+    n = len(data)
+    span = AX_BOT - AX_TOP
+    pts = []
+    for i, v in enumerate(data):
+        x = AX_RIGHT - (n - 1 - i)
+        y = AX_BOT - int(span * max(0.0, min(100.0, v)) / 100.0)
+        pts.append((x, y))
+    if len(pts) >= 2:
+        draw.line(pts, fill="white")
+    elif pts:
+        draw.point(pts[0], fill="white")
 
 
 def stats_loop(device, font, pager=None):
     # Live system stats with button paging (no boot/splash)
-    # pages: 0 = stats, 1 = throttle table 1/2, 2 = throttle table 2/2
+    # pages: 0=overview, 1=CPU, 2=TMP, 3=RAM, 4=DSK (graphs)
     from luma.core.render import canvas
 
     if pager is None:
-        pager = Toggle(5, pages=3)     # GPIO5 -> screen 1 (system)
+        pager = Toggle(5, pages=5)     # GPIO5 -> screen 1 (system)
+
+    cpu_hist, tmp_hist, ram_hist, dsk_hist = [], [], [], []
 
     while True:
         pager.poll()
@@ -248,13 +266,24 @@ def stats_loop(device, font, pager=None):
         temp_pct = (temp / 80.0 * 100.0) if temp is not None else 0.0
         temp_val = f"{temp:.0f}C" if temp is not None else "--"
 
+        for h, v in ((cpu_hist, cpu), (tmp_hist, temp_pct),
+                     (ram_hist, mem.percent), (dsk_hist, disk.percent)):
+            h.append(v)
+            if len(h) > GRAPH_W:
+                del h[0]
+
         with canvas(device) as draw:
-            if pager.page == 1:
-                draw_throttle_page(draw, font, 0)
-            elif pager.page == 2:
-                draw_throttle_page(draw, font, 1)
+            p = pager.page
+            if p == 1:
+                draw_graph(draw, font, "CPU", cpu_hist, f"{cpu:.0f}%")
+            elif p == 2:
+                draw_graph(draw, font, "TMP", tmp_hist, temp_val, "80")
+            elif p == 3:
+                draw_graph(draw, font, "RAM", ram_hist, f"{mem.percent:.0f}%")
+            elif p == 4:
+                draw_graph(draw, font, "DSK", dsk_hist, f"{disk.percent:.0f}%")
             else:
-                # Header: uptime on the left + throttle code on the right
+                # Page 0: overview. Header: uptime + throttle code
                 draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
                 thr_code = "T:" + throttle_short(thr_txt)
                 draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
