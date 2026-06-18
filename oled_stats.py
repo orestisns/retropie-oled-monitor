@@ -35,10 +35,11 @@ def get_device(port=1):
 
 
 class Toggle:
-    """One button that toggles a screen between page 0 and page 1.
-    Real button on the Pi (BCM pin -> GND); auto-toggle on PC for preview."""
-    def __init__(self, pin):
+    """One button that cycles a screen through `pages` pages (0..pages-1).
+    Real button on the Pi (BCM pin -> GND); auto-cycle on PC for preview."""
+    def __init__(self, pin, pages=2):
         self.page = 0
+        self.pages = pages
         self._auto_t = time.time()
         self._gpio = None
         try:
@@ -52,12 +53,12 @@ class Toggle:
             self._gpio = None   # PC / no GPIO
 
     def _press(self, channel):
-        self.page ^= 1
+        self.page = (self.page + 1) % self.pages
 
     def poll(self):
-        # No real button (PC) -> auto-toggle every 5s for preview
+        # No real button (PC) -> auto-cycle every 5s for preview
         if self._gpio is None and time.time() - self._auto_t > 5:
-            self.page ^= 1
+            self.page = (self.page + 1) % self.pages
             self._auto_t = time.time()
 
 
@@ -206,12 +207,35 @@ def row(draw, font, y, label, value, pct):
     draw.text((100, y), value, font=font, fill="white")
 
 
+# Throttle code reference (shown as pages 2 & 3 on the system screen)
+THR_ENTRIES = [
+    ("OK", "all good"),
+    ("UV", "under-volt"),
+    ("FC", "freq cap"),
+    ("TH", "throttled"),
+    ("TL", "temp limit"),
+    ("PE", "past event"),
+    ("--", "N/A"),
+]
+
+
+def draw_throttle_page(draw, font, p):
+    # p = 0 -> entries 0..3, p = 1 -> entries 4..6
+    draw.text((4, 2), f"THROTTLE  {p + 1}/2", font=font, fill="white")
+    draw.line((4, 12, 123, 12), fill="white")
+    y = 16
+    for code, meaning in THR_ENTRIES[p * 4:(p + 1) * 4]:
+        draw.text((4, y), f"{code}  {meaning}", font=font, fill="white")
+        y += 12
+
+
 def stats_loop(device, font, pager=None):
-    # Live system stats with one-button page toggle (no boot/splash)
+    # Live system stats with button paging (no boot/splash)
+    # pages: 0 = stats, 1 = throttle table 1/2, 2 = throttle table 2/2
     from luma.core.render import canvas
 
     if pager is None:
-        pager = Toggle(5)          # GPIO5 -> screen 1 (system)
+        pager = Toggle(5, pages=3)     # GPIO5 -> screen 1 (system)
 
     while True:
         pager.poll()
@@ -226,7 +250,9 @@ def stats_loop(device, font, pager=None):
 
         with canvas(device) as draw:
             if pager.page == 1:
-                ctext(draw, font, 26, "PAGE 2")
+                draw_throttle_page(draw, font, 0)
+            elif pager.page == 2:
+                draw_throttle_page(draw, font, 1)
             else:
                 # Header: uptime on the left + throttle code on the right
                 draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")

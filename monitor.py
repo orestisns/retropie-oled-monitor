@@ -66,8 +66,8 @@ def main():
 
     # 3) Live stats on both, simultaneously (forever)
     #    One button per screen: GPIO5 -> system, GPIO6 -> game.
-    sys_btn = oled_stats.Toggle(5)
-    game_btn = oled_stats.Toggle(6)
+    sys_btn = oled_stats.Toggle(5, pages=3)    # stats + throttle 1/2 + 2/2
+    game_btn = oled_stats.Toggle(6, pages=2)   # game stats + PAGE 2
     _both(
         oled_stats.stats_loop, (dev_system, font, sys_btn),
         game_stats.stats_loop, (dev_game, font, game_btn),
