@@ -111,7 +111,7 @@ _HL_RING_R = 155.425
 _HL_RING_W = 34.0
 
 
-def pixel_reveal(device, render_fn, hold=5.0, steps=60, frame_delay=0.03):
+def pixel_reveal(device, render_fn, hold=5.0, steps=60, frame_delay=0.015):
     # Draw with render_fn(draw) and reveal the pixels in random order
     from PIL import Image, ImageDraw
     full = Image.new("1", (device.width, device.height))
@@ -161,11 +161,11 @@ def boot_sequence(device, font):
     # Boot lines: time spread across the checks, holds 3s at the end
     # [label, result, delay] - the delay after each step
     lines = [
-        ["INIT SYSTEM", "OK", 1.5],
-        ["CPU SENSORS", "OK", 1.2],
-        ["MEMORY", "OK", 1.8],
-        ["RADIATION", "!", 1.2],
-        ["SYSTEM READY", "", 3.0],
+        ["INIT SYSTEM", "OK", 0.75],
+        ["CPU SENSORS", "OK", 0.6],
+        ["MEMORY", "OK", 0.9],
+        ["RADIATION", "!", 0.6],
+        ["SYSTEM READY", "", 1.5],
     ]
     shown = []
     for label, res, delay in lines:
@@ -175,10 +175,10 @@ def boot_sequence(device, font):
             for _ in range(2):
                 shown[-1][1] = ""
                 render_boot_lines(device, font, shown)
-                time.sleep(0.28)
+                time.sleep(0.14)
                 shown[-1][1] = "!"
                 render_boot_lines(device, font, shown)
-                time.sleep(0.28)
+                time.sleep(0.14)
         time.sleep(delay)
 
 

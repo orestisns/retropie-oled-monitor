@@ -6,7 +6,7 @@ RetroPie OLED Monitor - drives BOTH displays with a synchronized flow.
   Screen 2 (game)   -> I2C bus 4  (GPIO22/27)
 
 Startup flow:
-  1) Screen 1: boot sequence   (screen 2 blank)
+  1) Screen 1: boot sequence   (screen 2 counts down)
   2) Both: logo with pixel-reveal animation (simultaneously)
   3) Both: live stats          (simultaneously, forever)
 
@@ -23,9 +23,16 @@ import oled_stats
 import game_stats
 
 
-def _blank(device):
-    with canvas(device):
-        pass
+def _countdown(device, font, stop, start=5):
+    # Counts down on screen 2 while screen 1 runs the boot sequence
+    n = start
+    while not stop.is_set():
+        with canvas(device) as draw:
+            oled_stats.ctext(draw, font, 12, "SYSTEM INIT")
+            oled_stats.ctext(draw, font, 34, str(n))
+        if n > 0:
+            n -= 1
+        stop.wait(1.0)
 
 
 def _guard(fn):
@@ -54,9 +61,14 @@ def main():
     dev_system = oled_stats.get_device(port=3)      # /dev/i2c-3
     dev_game = oled_stats.get_device(port=4)        # /dev/i2c-4
 
-    # 1) Boot sequence on screen 1, screen 2 blank
-    _blank(dev_game)
+    # 1) Boot sequence on screen 1; screen 2 counts down meanwhile
+    stop = threading.Event()
+    cd = threading.Thread(target=_guard(_countdown),
+                          args=(dev_game, font, stop), daemon=True)
+    cd.start()
     oled_stats.boot_sequence(dev_system, font)
+    stop.set()
+    cd.join()
 
     # 2) Logo with animation on both, simultaneously
     _both(
