@@ -35,31 +35,63 @@ def get_device(port=1):
 
 
 class Toggle:
-    """One button that cycles a screen through `pages` pages (0..pages-1).
+    """One button per screen.
+      - short press        -> next page (cycles 0..pages-1)
+      - long press (>=3s)  -> turn the screen off / on (toggles .power)
     Real button on the Pi (BCM pin -> GND); auto-cycle on PC for preview."""
+    HOLD_SECS = 3.0
+
     def __init__(self, pin, pages=2):
         self.page = 0
+        self.power = True          # screen on/off
         self.pages = pages
+        self._pin = pin
+        self._press_t = 0.0
         self._auto_t = time.time()
         self._gpio = None
         try:
             import RPi.GPIO as GPIO
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(pin, GPIO.FALLING,
-                                  callback=self._press, bouncetime=300)
+            GPIO.add_event_detect(pin, GPIO.BOTH,
+                                  callback=self._edge, bouncetime=50)
             self._gpio = GPIO
         except Exception:
             self._gpio = None   # PC / no GPIO
 
-    def _press(self, channel):
-        self.page = (self.page + 1) % self.pages
+    def _edge(self, channel):
+        # Active-low button (pull-up). 0 = pressed, 1 = released.
+        now = time.time()
+        if self._gpio.input(self._pin) == 0:
+            self._press_t = now
+        else:
+            if now - self._press_t >= self.HOLD_SECS:
+                self.power = not self.power      # long press -> on/off
+            else:
+                self.page = (self.page + 1) % self.pages   # short -> next page
 
     def poll(self):
         # No real button (PC) -> auto-cycle every 5s for preview
         if self._gpio is None and time.time() - self._auto_t > 5:
             self.page = (self.page + 1) % self.pages
             self._auto_t = time.time()
+
+
+def screen_off(device):
+    # Power the OLED off (fallback: draw a blank/black frame)
+    try:
+        device.hide()
+    except Exception:
+        from luma.core.render import canvas
+        with canvas(device):
+            pass
+
+
+def screen_on(device):
+    try:
+        device.show()
+    except Exception:
+        pass
 
 
 def throttle_short(txt):
@@ -254,9 +286,20 @@ def stats_loop(device, font, pager=None):
         pager = Toggle(5, pages=5)     # GPIO5 -> screen 1 (system)
 
     cpu_hist, tmp_hist, ram_hist, dsk_hist = [], [], [], []
+    off = False
 
     while True:
         pager.poll()
+        if not pager.power:            # long-press turned the screen off
+            if not off:
+                screen_off(device)
+                off = True
+            time.sleep(0.3)
+            continue
+        if off:
+            screen_on(device)
+            off = False
+
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")

@@ -24,7 +24,8 @@ Run on Pi:
 import os, time, json
 
 # Reuse the drawing helpers + Toggle from screen 1
-from oled_stats import get_device, draw_aperture, pixel_reveal, ctext, Toggle
+from oled_stats import (get_device, draw_aperture, pixel_reveal, ctext,
+                        Toggle, screen_off, screen_on)
 
 STATUS_FILE = os.environ.get(
     "GAME_STATUS_FILE",
@@ -132,9 +133,20 @@ def stats_loop(device, font, pager=None):
     active_game = None
     active_start = None
     scroll = 0
+    off = False
 
     while True:
         pager.poll()
+        if not pager.power:            # long-press turned the screen off
+            if not off:
+                screen_off(device)
+                off = True
+            time.sleep(0.3)
+            continue
+        if off:
+            screen_on(device)
+            off = False
+
         d = read_status()
         playing = bool(d.get("game"))
         now = time.time()
