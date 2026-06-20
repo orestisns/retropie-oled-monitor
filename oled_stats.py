@@ -36,13 +36,14 @@ def get_device(port=1):
 
 class Toggle:
     """One button per screen.
-      - short press        -> next page (cycles 0..pages-1)
-      - long press (>=3s)  -> turn the screen off / on (toggles .power)
+      - tap (release)      -> next page (cycles 0..pages-1)
+      - long press (>=3s)  -> turn the screen off / on (toggles .power),
+                              no page change
     Polls the GPIO in a background thread (reliable + debounced).
     On PC (no GPIO) the page auto-cycles for preview."""
     HOLD_SECS = 3.0
     POLL = 0.02         # 20 ms sampling
-    DEBOUNCE = 0.04     # ignore presses shorter than this (switch bounce)
+    DEBOUNCE = 0.04     # min stable time between accepted transitions
 
     def __init__(self, pin, pages=2):
         self.page = 0
@@ -62,30 +63,27 @@ class Toggle:
 
     def _run(self):
         GPIO = self._gpio
-        pressed = False
+        stable = 1                 # 1 = released, 0 = pressed (active low)
+        last_change = time.time()
         t_press = 0.0
         long_done = False
         while True:
-            level = GPIO.input(self._pin)      # 1 = released, 0 = pressed
+            raw = GPIO.input(self._pin)
             now = time.time()
-            if not pressed and level == 0:
-                pressed = True
-                t_press = now
-                long_done = False
-            elif pressed and level == 0:
-                # still held -> fire power toggle the moment 3s is reached
-                if not long_done and now - t_press >= self.HOLD_SECS:
-                    self.power = not self.power
-                    long_done = True
-            elif pressed and level == 1:
-                pressed = False
-                dur = now - t_press
-                if long_done:
-                    pass                        # already handled on hold
-                elif dur < self.DEBOUNCE:
-                    pass                        # bounce/noise -> ignore
-                else:
-                    self.page = (self.page + 1) % self.pages  # short -> next page
+            # debounced edge: accept only after stable for DEBOUNCE
+            if raw != stable and (now - last_change) >= self.DEBOUNCE:
+                stable = raw
+                last_change = now
+                if raw == 0:                       # confirmed press
+                    t_press = now
+                    long_done = False
+                else:                              # confirmed release
+                    if not long_done:              # tap -> next page
+                        self.page = (self.page + 1) % self.pages
+            # while held, fire power toggle the moment 3s is reached
+            if stable == 0 and not long_done and (now - t_press) >= self.HOLD_SECS:
+                self.power = not self.power
+                long_done = True
             time.sleep(self.POLL)
 
     def poll(self):
@@ -305,6 +303,16 @@ def stats_loop(device, font, pager=None):
 
     cpu_hist, tmp_hist, ram_hist, dsk_hist = [], [], [], []
     off = False
+    last_data = 0.0
+    last_page = -1
+
+    # initial readings so the first render has data
+    cpu = 0.0
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
+    temp_pct = 0.0
+    temp_val = "--"
+    thr_txt = "OK"
 
     while True:
         pager.poll()
@@ -312,50 +320,56 @@ def stats_loop(device, font, pager=None):
             if not off:
                 screen_off(device)
                 off = True
-            time.sleep(0.3)
+            last_page = -1             # force redraw when turned back on
+            time.sleep(0.1)
             continue
         if off:
             screen_on(device)
             off = False
+            last_page = -1
 
-        cpu = psutil.cpu_percent(interval=None)
-        mem = psutil.virtual_memory()
-        disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
-        temp = cpu_temp()                      # float C or None
-        thr_txt, _ = throttled_status()
+        now = time.time()
+        data_due = now - last_data >= 1.0
+        if data_due:
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory()
+            disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
+            temp = cpu_temp()                      # float C or None
+            thr_txt, _ = throttled_status()
+            temp_pct = (temp / 80.0 * 100.0) if temp is not None else 0.0
+            temp_val = f"{temp:.0f}C" if temp is not None else "--"
+            for h, v in ((cpu_hist, cpu), (tmp_hist, temp_pct),
+                         (ram_hist, mem.percent), (dsk_hist, disk.percent)):
+                h.append(v)
+                if len(h) > GRAPH_W:
+                    del h[0]
+            last_data = now
 
-        temp_pct = (temp / 80.0 * 100.0) if temp is not None else 0.0
-        temp_val = f"{temp:.0f}C" if temp is not None else "--"
+        # Re-render on a data tick OR immediately when the page changed
+        if data_due or pager.page != last_page:
+            with canvas(device) as draw:
+                p = pager.page
+                if p == 1:
+                    draw_graph(draw, font, "CPU", cpu_hist, f"{cpu:.0f}%")
+                elif p == 2:
+                    draw_graph(draw, font, "TMP", tmp_hist, temp_val, "80")
+                elif p == 3:
+                    draw_graph(draw, font, "RAM", ram_hist, f"{mem.percent:.0f}%")
+                elif p == 4:
+                    draw_graph(draw, font, "DSK", dsk_hist, f"{disk.percent:.0f}%")
+                else:
+                    # Page 0: overview. Header: uptime + throttle code
+                    draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
+                    thr_code = "T:" + throttle_short(thr_txt)
+                    draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
+                    draw.line((4, 12, 123, 12), fill="white")
+                    row(draw, font, 16, "CPU", f"{cpu:.0f}%", cpu)
+                    row(draw, font, 28, "TMP", temp_val, temp_pct)
+                    row(draw, font, 40, "RAM", f"{mem.percent:.0f}%", mem.percent)
+                    row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
+            last_page = pager.page
 
-        for h, v in ((cpu_hist, cpu), (tmp_hist, temp_pct),
-                     (ram_hist, mem.percent), (dsk_hist, disk.percent)):
-            h.append(v)
-            if len(h) > GRAPH_W:
-                del h[0]
-
-        with canvas(device) as draw:
-            p = pager.page
-            if p == 1:
-                draw_graph(draw, font, "CPU", cpu_hist, f"{cpu:.0f}%")
-            elif p == 2:
-                draw_graph(draw, font, "TMP", tmp_hist, temp_val, "80")
-            elif p == 3:
-                draw_graph(draw, font, "RAM", ram_hist, f"{mem.percent:.0f}%")
-            elif p == 4:
-                draw_graph(draw, font, "DSK", dsk_hist, f"{disk.percent:.0f}%")
-            else:
-                # Page 0: overview. Header: uptime + throttle code
-                draw.text((4, 2), f"UP {uptime_str()}", font=font, fill="white")
-                thr_code = "T:" + throttle_short(thr_txt)
-                draw.text((124 - len(thr_code) * 6, 2), thr_code, font=font, fill="white")
-                draw.line((4, 12, 123, 12), fill="white")
-
-                row(draw, font, 16, "CPU", f"{cpu:.0f}%", cpu)
-                row(draw, font, 28, "TMP", temp_val, temp_pct)
-                row(draw, font, 40, "RAM", f"{mem.percent:.0f}%", mem.percent)
-                row(draw, font, 52, "DSK", f"{disk.percent:.0f}%", disk.percent)
-
-        time.sleep(1)
+        time.sleep(0.1)
 
 
 def run(device, font):

@@ -134,6 +134,10 @@ def stats_loop(device, font, pager=None):
     active_start = None
     scroll = 0
     off = False
+    last_data = 0.0
+    last_page = -1
+    d = {}
+    total_secs = 0
 
     while True:
         pager.poll()
@@ -141,43 +145,50 @@ def stats_loop(device, font, pager=None):
             if not off:
                 screen_off(device)
                 off = True
-            time.sleep(0.3)
+            last_page = -1             # force redraw when turned back on
+            time.sleep(0.1)
             continue
         if off:
             screen_on(device)
             off = False
+            last_page = -1
 
-        d = read_status()
-        playing = bool(d.get("game"))
         now = time.time()
-
-        total_secs = 0
-        if playing:
-            game = d.get("game", "?")
-            try:
-                start = float(d.get("start", now))
-            except Exception:
-                start = now
-            if game != active_game:
+        data_due = now - last_data >= 0.4
+        if data_due:
+            d = read_status()
+            playing = bool(d.get("game"))
+            total_secs = 0
+            if playing:
+                game = d.get("game", "?")
+                try:
+                    start = float(d.get("start", now))
+                except Exception:
+                    start = now
+                if game != active_game:
+                    if active_game is not None:
+                        totals[active_game] = totals.get(active_game, 0) + (now - active_start)
+                        save_totals(totals)
+                    active_game, active_start = game, start
+                total_secs = totals.get(game, 0) + (now - active_start)
+            else:
                 if active_game is not None:
                     totals[active_game] = totals.get(active_game, 0) + (now - active_start)
                     save_totals(totals)
-                active_game, active_start = game, start
-            total_secs = totals.get(game, 0) + (now - active_start)
-        else:
-            if active_game is not None:
-                totals[active_game] = totals.get(active_game, 0) + (now - active_start)
-                save_totals(totals)
-                active_game = active_start = None
+                    active_game = active_start = None
+            scroll += 1
+            last_data = now
 
-        with canvas(device) as draw:
-            if pager.page == 1:
-                ctext(draw, font, 26, "PAGE 2")
-            else:
-                draw_game_page(draw, font, d, active_start, total_secs, scroll)
+        # Re-render on a data tick OR immediately when the page changed
+        if data_due or pager.page != last_page:
+            with canvas(device) as draw:
+                if pager.page == 1:
+                    ctext(draw, font, 26, "PAGE 2")
+                else:
+                    draw_game_page(draw, font, d, active_start, total_secs, scroll)
+            last_page = pager.page
 
-        scroll += 1
-        time.sleep(0.4)
+        time.sleep(0.1)
 
 
 def run(device, font, pager=None):
