@@ -64,19 +64,26 @@ class Toggle:
         GPIO = self._gpio
         pressed = False
         t_press = 0.0
+        long_done = False
         while True:
             level = GPIO.input(self._pin)      # 1 = released, 0 = pressed
             now = time.time()
             if not pressed and level == 0:
                 pressed = True
                 t_press = now
+                long_done = False
+            elif pressed and level == 0:
+                # still held -> fire power toggle the moment 3s is reached
+                if not long_done and now - t_press >= self.HOLD_SECS:
+                    self.power = not self.power
+                    long_done = True
             elif pressed and level == 1:
                 pressed = False
                 dur = now - t_press
-                if dur < self.DEBOUNCE:
+                if long_done:
+                    pass                        # already handled on hold
+                elif dur < self.DEBOUNCE:
                     pass                        # bounce/noise -> ignore
-                elif dur >= self.HOLD_SECS:
-                    self.power = not self.power  # long press -> on/off
                 else:
                     self.page = (self.page + 1) % self.pages  # short -> next page
             time.sleep(self.POLL)
