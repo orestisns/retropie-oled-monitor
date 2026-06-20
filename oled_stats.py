@@ -10,7 +10,7 @@ Run on Raspberry Pi (real OLED over I2C):
     pip3 install luma.oled pillow psutil
     python3 oled_stats.py
 """
-import os, sys, time, math, random
+import os, sys, time, math, random, threading
 
 # Reuse the "logic" from the terminal script
 from stats import cpu_temp, throttled_status, uptime_str
@@ -38,37 +38,48 @@ class Toggle:
     """One button per screen.
       - short press        -> next page (cycles 0..pages-1)
       - long press (>=3s)  -> turn the screen off / on (toggles .power)
-    Real button on the Pi (BCM pin -> GND); auto-cycle on PC for preview."""
+    Polls the GPIO in a background thread (reliable + debounced).
+    On PC (no GPIO) the page auto-cycles for preview."""
     HOLD_SECS = 3.0
+    POLL = 0.02         # 20 ms sampling
+    DEBOUNCE = 0.04     # ignore presses shorter than this (switch bounce)
 
     def __init__(self, pin, pages=2):
         self.page = 0
         self.power = True          # screen on/off
         self.pages = pages
         self._pin = pin
-        self._press_t = 0.0
         self._auto_t = time.time()
         self._gpio = None
         try:
             import RPi.GPIO as GPIO
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(pin, GPIO.BOTH,
-                                  callback=self._edge, bouncetime=50)
             self._gpio = GPIO
+            threading.Thread(target=self._run, daemon=True).start()
         except Exception:
             self._gpio = None   # PC / no GPIO
 
-    def _edge(self, channel):
-        # Active-low button (pull-up). 0 = pressed, 1 = released.
-        now = time.time()
-        if self._gpio.input(self._pin) == 0:
-            self._press_t = now
-        else:
-            if now - self._press_t >= self.HOLD_SECS:
-                self.power = not self.power      # long press -> on/off
-            else:
-                self.page = (self.page + 1) % self.pages   # short -> next page
+    def _run(self):
+        GPIO = self._gpio
+        pressed = False
+        t_press = 0.0
+        while True:
+            level = GPIO.input(self._pin)      # 1 = released, 0 = pressed
+            now = time.time()
+            if not pressed and level == 0:
+                pressed = True
+                t_press = now
+            elif pressed and level == 1:
+                pressed = False
+                dur = now - t_press
+                if dur < self.DEBOUNCE:
+                    pass                        # bounce/noise -> ignore
+                elif dur >= self.HOLD_SECS:
+                    self.power = not self.power  # long press -> on/off
+                else:
+                    self.page = (self.page + 1) % self.pages  # short -> next page
+            time.sleep(self.POLL)
 
     def poll(self):
         # No real button (PC) -> auto-cycle every 5s for preview
