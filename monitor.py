@@ -23,7 +23,7 @@ import oled_stats
 import game_stats
 
 
-def _countdown(device, font, stop, start=5):
+def _countdown(device, font, stop, start=3):
     # Counts down on screen 2 while screen 1 runs the boot sequence
     n = start
     while not stop.is_set():
